@@ -1,6 +1,5 @@
 from pyrogram import filters, types
 from config import OWNER_ID, DB_NAME, MAX_TRACKERS, URL_REGEX
-from bot import TrackBot
 import aiosqlite
 import re
 import hashlib
@@ -16,29 +15,7 @@ def main_menu():
          types.InlineKeyboardButton("❓ Help", callback_data="help")]
     ])
 
-async def init_db():
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute('''CREATE TABLE IF NOT EXISTS trackers(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            interval INTEGER,
-            last_hash TEXT,
-            next_check DATETIME,
-            status TEXT DEFAULT 'active')''')
-        await db.execute('''CREATE TABLE IF NOT EXISTS admins(
-            user_id INTEGER PRIMARY KEY,
-            added_by INTEGER,
-            added_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-        await db.commit()
-
-async def is_admin(user_id: int) -> bool:
-    async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute('SELECT 1 FROM admins WHERE user_id=?', (user_id,))
-        return bool(await cursor.fetchone())
-
-async def register_handlers(client: TrackBot):
-    
+async def register_handlers(client):
     # Owner Commands
     @client.on_message(filters.command("addadmin") & filters.user(OWNER_ID))
     async def add_admin(client, message):
@@ -58,19 +35,8 @@ async def register_handlers(client: TrackBot):
         except Exception as e:
             await message.reply(f"❌ Error: {str(e)}")
 
-    @client.on_message(filters.command("removeadmin") & filters.user(OWNER_ID))
-    async def remove_admin(client, message):
-        try:
-            user_id = int(message.command[1])
-            async with aiosqlite.connect(DB_NAME) as db:
-                await db.execute('DELETE FROM admins WHERE user_id=?', (user_id,))
-                await db.commit()
-            await message.reply(f"✅ Admin removed: {user_id}")
-        except Exception as e:
-            await message.reply(f"❌ Error: {str(e)}")
-
     # Tracking Commands
-    @client.on_message(filters.command("track") & filters.create(lambda _, __, m: is_admin(m.from_user.id)))
+    @client.on_message(filters.command("track"))
     async def add_tracker(client, message):
         if len(message.command) < 2:
             return await message.reply("Usage: /track <url> [interval]")
